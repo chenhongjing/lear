@@ -104,6 +104,7 @@ class AlternateName(Versioned, db.Model, BusinessCommon):
     colin_entity = db.relationship("ColinEntity", back_populates="alternate_names")
     filings = db.relationship("Filing", lazy="dynamic", foreign_keys="Filing.alternate_name_id")
     documents = db.relationship("Document", lazy="dynamic")
+    offices = db.relationship("Office", lazy="dynamic", cascade="all, delete, delete-orphan")
 
     @classmethod
     def find_by_identifier(cls, identifier: str) -> AlternateName | None:
