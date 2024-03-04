@@ -100,7 +100,7 @@ $$;
 -- A temp table to determine which SP/GP legal entities_history records contain legal name changes and the necessary
 -- query logic to determine correct end transaction ids/dates so that they can be used for
 -- alternate_names/alternate_names_history entries.  This table is also used to update the existing entities_history
--- records.
+-- records. 把SP/GP的记录都先从LE和LEH中拿出来放在一个temp表中
 CREATE TABLE temp_legal_name_changes AS
 select le.id,
        le.identifier,
@@ -198,7 +198,8 @@ where leh.entity_type in ('SP', 'GP')
 ;
 
 
--- Insert last name change entry for SP/GPs in legal_entities_history table into alternate_names
+-- Insert last name change entry for SP/GPs in legal_entities table into alternate_names
+-- 把有legal name change的SP/GP的最大版本记录放入AN表中，AN中目前版本记录为初始值1
 INSERT
 INTO alternate_names(legal_entity_id, identifier, name, bn15, start_date, end_date, name_type,
                      naics_key, naics_code, naics_description, business_start_date, dissolution_date,
@@ -236,6 +237,7 @@ order by lnc.version desc
 
 
 -- Insert name change entries for SP/GPs in legal_entities_history table into alternate_names_history
+-- 没懂！！！！
 WITH id_values AS (SELECT nextval('alternate_names_id_seq') as an_seq_id, lnc.*
                    FROM temp_legal_name_changes lnc
                             join alternate_names an on an.legal_entity_id = lnc.id
@@ -295,6 +297,7 @@ FROM id_values;
 
 -- Delete legal_entities_history entries that are only name changes.  These will be represented in the
 -- alternate_names_history table
+-- 但是这个操作把版本是1的只有name change的记录保留了（目前来看后面又会有一些操作）
 delete
 from legal_entities_history leh
     using temp_legal_name_changes lnc
@@ -344,7 +347,7 @@ where le.id = tempLeh.id
 ;
 
 
--- Update SP/GP legal names to be NULL as the legal name for firms will be calculated dynamically by the API
+-- Update SP/GP legal names to be NULL as the legal name for firms （will be calculated dynamically by the API，改了现在不是动态计算出）
 UPDATE legal_entities_history leh
 SET legal_name = NULL
 where leh.entity_type in ('SP', 'GP')
@@ -352,7 +355,7 @@ where leh.entity_type in ('SP', 'GP')
 ;
 
 
--- Update SP/GP legal names to be NULL as the legal name for firms will be calculated dynamically by the API
+-- Update SP/GP legal names to be NULL as the legal name for firms (will be calculated dynamically by the API，改了现在不是动态计算出）
 UPDATE legal_entities le
 SET legal_name=NULL
 where le.entity_type in ('SP', 'GP')
@@ -360,6 +363,12 @@ where le.entity_type in ('SP', 'GP')
 ;
 
 
+-- 到目前为止，AN/ANH里有SP/GP的记录，
+-- 更新了LE/LEH，把只有legal name change的记录移除了，并且更新了version number
+-- 那些只有legal name change的记录在AN/ANH里显示
+
+
+-- 突然意识到，party一定是会插入到LE/CE中的，因为本身LE中没有记录，CE又是新表
 CREATE TABLE temp_parties_legal_name AS
 select distinct ph.id                                                                        as party_id,
                 (CASE
@@ -390,19 +399,19 @@ select distinct ph.id                                                           
                 ph.identifier,
                 ph.email,
                 le.id                                                                        as matching_legal_entity_id,
-                (r.id is null and pr.filing_id is null)                                         is_business_party,
-                (r.id is null and pr.filing_id is null and ph.party_type = 'person')            is_business_party_person,
+                (r.id is null and pr.filing_id is null)                                         is_business_party, -- 判断business(LE)是不是party
+                (r.id is null and pr.filing_id is null and ph.party_type = 'person')            is_business_party_person, -- 判断business(LE)是不是类型为person的party
                 (r.id is null
                     and pr.filing_id is null
                     and ph.party_type = 'organization'
                     and le.id is null
                     and (ph.identifier is null or ph.identifier = '' or ph.identifier like 'FM%')
-                    )                                                                           is_business_party_org_no_match,
+                    )                                                                           is_business_party_org_no_match, -- 判断party在LE表中没有对应记录
                 (r.id is null
                     and pr.filing_id is null
                     and ph.party_type = 'organization'
                     and
-                 le.id is not null)                                                             is_business_party_org_match,
+                 le.id is not null)                                                             is_business_party_org_match, -- 判断party在LE表中有对应记录
                 (r.id is null
                     and pr.filing_id is null
                     and le.id is null
@@ -427,7 +436,7 @@ select distinct p.id                                                            
                      WHEN pr.role = 'proprietor' and p.party_type = 'person'
                          THEN pr.legal_entity_id
                      ELSE CAST(NULL AS INTEGER)
-                    END)                                                                    AS new_legal_entity_id,
+                    END)                                                                    AS new_legal_entity_id, -- party连到的LE(也就是说这个LE的一个party是当前的这一条记录)
                 p.party_type,
                 (CASE
                      WHEN p.party_type = 'person'
@@ -509,12 +518,12 @@ WITH insert_parties AS (
         from temp_parties_legal_name tp
         where tp.version = tp.max_version
           and not tp.is_business_party_colin_entity
-          and not tp.is_proprietor_person
+          and not tp.is_proprietor_person -- person是后续单独处理的
         RETURNING id, temp_party_id)
 UPDATE temp_parties_legal_name
 set new_legal_entity_id = ibp.id
 from insert_parties ibp
-where temp_parties_legal_name.party_id = ibp.temp_party_id
+where temp_parties_legal_name.party_id = ibp.temp_party_id -- 并且更新了party对应的新id(也就是插入LE的作为organization存在的party-->这个后续还要link到organization代表的business本身的)
 ;
 
 
@@ -651,7 +660,7 @@ with subquery AS
                  tp.mailing_address_id,
                  tp.email,
                  tp.change_filing_id,
-                 tp.new_legal_entity_id              as sp_legal_entity_id
+                 tp.new_legal_entity_id              as sp_legal_entity_id -- 这个是当前owner(这个party记录)对应的SP的LE_id(暂未更新过还是旧的)
           from temp_parties_legal_name tp
                    join legal_entities_history leh
                         on tp.new_legal_entity_id = leh.id and tp.change_filing_id = leh.change_filing_id
@@ -676,7 +685,7 @@ set entity_type         = 'person',
     mailing_address_id  = sq.mailing_address_id,
     email               = sq.email
 from subquery sq
-WHERE leh.id = sq.sp_legal_entity_id
+WHERE leh.id = sq.sp_legal_entity_id -- 这是直接把LEH的SP记录直接改成了person(合理合理，免得还有删了SP再增加person)，temp_parties_legal_name表中的new_legal_entity_id也不需要更新了
   AND leh.change_filing_id = sq.change_filing_id
 ;
 
@@ -719,12 +728,13 @@ set entity_type         = 'person',
     mailing_address_id  = sq.mailing_address_id,
     email               = sq.email
 from subquery sq
-WHERE le.id = sq.sp_legal_entity_id
+WHERE le.id = sq.sp_legal_entity_id -- 同样的直接把LE的SP记录改成了person
   AND le.change_filing_id = sq.change_filing_id
 ;
 
 
--- For each entry in party_history table that has no matching change_filing_id in LE SP tables, find the most recent
+-- 这里有一点没有懂！！！
+-- For each entry in party_history table that has no matching change_filing_id in LE SP tables(也就是说，存在没有办法直接把SP改成person的记录), find the most recent
 -- SP LE history entry and combine with party data. bump the version number using prev entry version num as base.
 -- Create a function to get the previous SP LE history entry
 CREATE OR REPLACE FUNCTION get_previous_le_history_entry(le_id INT, change_filing_id_compare INT)
@@ -827,7 +837,7 @@ order by tp.change_filing_id asc
 ;
 
 
--- Update SP LE active entry if party entry matches change filing id
+-- Update SP LE active entry if party entry matches change filing id (和前面把SP改成person的操作同理)
 with subquery AS
          (select CONCAT_WS(' ', NULLIF(tp.first_name, ''), NULLIF(tp.middle_initial, ''),
                            NULLIF(tp.last_name, '')) as legal_name,
@@ -868,7 +878,7 @@ WHERE le.id = sq.sp_legal_entity_id
   AND le.change_filing_id = sq.change_filing_id
 ;
 
--- Update SP LE history entry if party entry matches change filing id
+-- Update SP LE history entry if party entry matches change filing id (和前面把SP改成person的操作同理)
 with subquery AS
          (select CONCAT_WS(' ', NULLIF(tp.first_name, ''), NULLIF(tp.middle_initial, ''),
                            NULLIF(tp.last_name, '')) as legal_name,
@@ -1018,7 +1028,7 @@ WITH unmatched_entries AS
          ORDER BY change_filing_id DESC
          LIMIT 1
          ) leh ON TRUE)
--- if no match, clone LE SP active entry and INSERT into history table, update active row using party entry.  bump the
+-- if no match, clone LE SP active entry and INSERT into history table, update active row using party entry(想想合理，因为把SP改成person了，以原本是party entry的person为主).  bump the
 -- version number using prev entry version num as base
    , clone_and_insert AS
     (SELECT insert_into_leh(
@@ -1139,6 +1149,7 @@ WHERE leh.id = se.id
 ;
 
 
+-- 把LE中的记录变得和LEH一致
 -- For each LE SP active entry, find the most recent LE SP history record
 --    1. if no LE SP history record exists, do nothing.
 --    2. if LE SP history record is found and there is no match in party or party history tables, copy person info from LE SP history record and bump version num from LE SP history record.
@@ -1153,6 +1164,7 @@ CREATE TABLE recent_history_details AS (SELECT leh.*
                                                  JOIN recent_history rh
                                                       ON leh.id = rh.id AND leh.change_filing_id = rh.max_change_filing_id);
 
+-- 这个表是所有LE和temp party table能匹配上的记录
 CREATE TABLE party_matches AS (SELECT le.id, tp.party_id
                                FROM legal_entities le
                                         LEFT JOIN temp_parties_legal_name tp ON le.id = tp.new_legal_entity_id AND
@@ -1217,6 +1229,9 @@ DROP TABLE recent_history;
 DROP TABLE recent_history_details;
 DROP TABLE party_matches;
 
+-- 到这里，已知的信息有：party的信息已经插入到LE中，temp_parties_legal_name中的new_legal_entity_id已经与新插入的数据一一对应
+-- LEH表的party数据也与LE表的数据有一致性，
+
 -- ************************************************************************************************
 -- PARTY_ROLES/PARTY_ROLES_history -> ENTIYTY_ROLES/ENTITY_ROLES_history
 -- ************************************************************************************************
@@ -1227,8 +1242,8 @@ select pr.id                 as party_role_id,
        pr.role::roletypes    as role_type,
        pr.appointment_date,
        pr.cessation_date,
-       pr.legal_entity_id,
-       pr.party_id,
+       pr.legal_entity_id, -- 这个是原来用来link到business的字段(business_id)，多个记录可以有相同值(即business可有多个party, 它们role不同)
+       pr.party_id,        -- 原来用来找到对应的party记录
        pr.filing_id,
        pr.change_filing_id,
        f.effective_date      as changed,
@@ -1263,8 +1278,8 @@ WITH insert_parties_entity_role AS (
     INSERT INTO entity_roles (role_type, legal_entity_id, related_entity_id, appointment_date, cessation_date,
                               temp_party_role_id, temp_party_id, filing_id, change_filing_id, version)
         select distinct tpr.role_type,
-                        tpr.legal_entity_id,
-                        tp.new_legal_entity_id,
+                        tpr.legal_entity_id, -- 这个是关联到的LE记录而不是这个party本身的LE记录
+                        tp.new_legal_entity_id, -- 这个才是party本身的LE记录
                         tpr.appointment_date,
                         tpr.cessation_date,
                         tpr.party_role_id as temp_party_role_id,
@@ -1577,6 +1592,7 @@ WHERE dcibuuc.legal_entity_id = le.id
   AND le.entity_type != 'GP';
 
 
+-- 这里直接用legal_entity来更新document的history table是没问题的，doc是建立在LE基础上的，LE肯定至少有一条数据的
 UPDATE documents_history dh
 SET alternate_name_id = an.id,
     legal_entity_id   = NULL
@@ -1598,6 +1614,12 @@ WHERE d.legal_entity_id = le.id
 --  offices table.  Businesses addresses should already be linked for SP persons
 
 
+-- 关于更新addresses里的alternate_name_id (明天白天可以先写一个草稿)
+-- brainstorm: 要放在LE中的SP被删除之前进行，首先要确保更新了offices信息且是对的
+-- 更新addresses中的
+-- alternate_names, alternate_names.state='HISTORICAL' -> offices.alternate_id, offices.office_type = 'custodialOffice' -> addresses.office_id, addresses.alternate_name_id = alternate_names.id, addresses.change_filing_id = alternate_names.change_filing_id
+-- 但是addresses_history怎么解决? (实在想不出来了，放弃，问Argus吧)
+
 CREATE TABLE temp_sp_person_entity_role AS
 select le.id          as sp_id,
        le.entity_type as sp_entity_type,
@@ -1618,18 +1640,24 @@ update legal_entities le
 set entity_type = 'person'
 where le.id in (select sp_id from temp_sp_person_entity_role);
 
+-- 有疑问，为什么不把person从entity_roles里移除呀？是本来就没有在里面吗？-->好像还真没有在里面
+
+
+-- 相比上面temp_sp_person_entity_role，这个我没有疑问，之前把party移到LE时没有更改到entity_type，但是为什么
+-- sp person仍然有 entity type是SP，不是在这之前就直接覆盖写成person了吗？
+-- 感觉不是一个必须的操作，难道Argus这样做是为了处理漏网之鱼？
 
 -- Move remaining SP DBA LEAR associations that need to reside with alternate_names
 CREATE TABLE temp_sp_dba_entity_role AS
-select le.id                as sp_id,
+select le.id                as sp_id, -- 对，只是移走了SP person, SP DBA 还在的
        le.entity_type       as sp_entity_type,
        le.identifier        as sp_identifer,
-       er.id                as er_id,
+       er.id                as er_id, -- 这个对应的记录是SP的owner的entity_role记录
        er.role_type         as er_role_type,
-       ler.id               as related_entity_id,
-       ler.entity_type      as related_entity_type,
-       ler.identifier       as related_identifier,
-       le_match.id          as le_match_id,
+       ler.id               as related_entity_id, -- 对应SP的owner的LE id
+       ler.entity_type      as related_entity_type, -- 对应SP的owner的entity type（因为是从party里导入的，所以这里指的是organization和person）
+       ler.identifier       as related_identifier, -- owner的identifier
+       le_match.id          as le_match_id, -- owner真正对应上的business的id（有LE的organization指向真正的实体，我把organization当作一个介质来理解吧）
        le_match.entity_type as le_match_entity_type
 from legal_entities le
          join entity_roles er on le.id = er.legal_entity_id
@@ -1651,6 +1679,9 @@ FROM (SELECT sp_id, le_match_id
       FROM temp_sp_dba_entity_role) AS temp
 WHERE an.legal_entity_id = temp.sp_id;
 
+-- brainstorm: 如果是更新ANH的mailing/delivery/email，需要从对应的LEH中拿organization的mailing/delivery/email info
+-- 怎么找对应的数据呢? 我猜是看change_filing_id (但是需要和Argus确认一下)
+-- LE的id -> LEH的id -> AEH.change_filing_id = LEH.change_filing_id
 
 UPDATE alternate_names_history anh
 SET legal_entity_id = temp.le_match_id
@@ -1659,6 +1690,9 @@ FROM (SELECT sp_id, le_match_id
 WHERE anh.legal_entity_id = temp.sp_id;
 
 
+-- 不是很懂为什么要把sp_dba owner的记录从中删除？？？ --> 现在理解了，删除介质organization的记录
+-- 但是我又有其他问题了？？？那真正的business实体的entity roles是什么时候导入的？
+-- （第二天的想法），是觉得org link到entity_roles再link 会LE的real business太麻烦了吗，干脆删掉中介organization留下real busines本身？
 DELETE
 FROM entity_roles_history
 WHERE id IN (SELECT er_id
@@ -1695,6 +1729,7 @@ FROM offices
 WHERE legal_entity_id IN (SELECT sp_id
                           FROM temp_sp_dba_entity_role);
 
+-- 把SP记录本身从LE和LEH中删了
 DELETE
 FROM legal_entities_history
 WHERE id IN (SELECT sp_id
@@ -1731,6 +1766,9 @@ FROM (SELECT sp_id, related_colin_entity_id
       FROM temp_sp_dba_colin_entity_role) AS temp
 WHERE an.legal_entity_id = temp.sp_id;
 
+-- brainstorm: 类似的关于SP DBA Colin，如果是更新ANH的mailing/delivery/email，需要从对应的CEH中拿organization的mailing/delivery/email info
+-- 怎么找对应的数据呢? 我猜是看change_filing_id (但是需要和Argus确认一下)
+-- CE的id -> CEH的id -> AEH.change_filing_id = CEH.change_filing_id
 
 UPDATE alternate_names_history anh
 SET legal_entity_id = null,
@@ -1740,6 +1778,7 @@ FROM (SELECT sp_id, related_colin_entity_id
 WHERE anh.legal_entity_id = temp.sp_id;
 
 
+-- 同样的不能理解为什么这里要删掉er字段
 DELETE
 FROM entity_roles_history
 WHERE id IN (SELECT er_id
