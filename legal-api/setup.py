@@ -57,16 +57,18 @@ setup(
     name="legal_api",
     version=version,
     author_email='thor@wolpert.ca',
-    packages=find_packages(where='src'),
+    packages=find_packages('src'),
     package_dir={'': 'src'},
-    include_package_data=True,
-    data_files=[('legal_api/report_templates', glob('report-templates/*'))],  # Include report-templates as data files
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
+    include_package_data=True,
     license=read('LICENSE'),
     long_description=read('README.md'),
     zip_safe=False,
     install_requires=REQUIREMENTS,
-    setup_requires=["pytest-runner"],
-    tests_require=["pytest"]
+    package_data={
+        '': ['report-templates/**/*.html'],  # Include all .html files in report-templates and subdirectories
+    },
+    setup_requires=["pytest-runner", ],
+    tests_require=["pytest", ]
 )
 
