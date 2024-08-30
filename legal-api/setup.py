@@ -57,12 +57,15 @@ setup(
     name="legal_api",
     version=version,
     author_email='thor@wolpert.ca',
-    packages=find_packages('src'),
-    package_dir={'': 'src'},
+    packages=find_packages('src') + find_packages(where='report-template'),
+    package_dir={
+        '': 'src',
+        'report_templates': 'report-templates'
+    },
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     include_package_data=True,
     extras_require={
-        'templates': ['report-templates'],
+        'templates': ['report_templates'],
     },
     license=read('LICENSE'),
     long_description=read('README.md'),
