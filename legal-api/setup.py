@@ -56,16 +56,14 @@ import os
 
 report_templates = 'report-templates'
 
-def get_data_files(directory):
+def get_data_files_in_package(package_dir, directory):
     data_files = []
     for dirpath, dirnames, filenames in os.walk(directory):
         for filename in filenames:
             filepath = os.path.join(dirpath, filename)
-            # Create the installation path by removing the base directory name
             install_path = os.path.relpath(dirpath, directory)
-            data_files.append((os.path.join('legal_api', 'report-templates', install_path), [filepath]))
+            data_files.append((os.path.join(package_dir, install_path), [filepath]))
     return data_files
-
 
 setup(
     name="legal_api",
@@ -75,7 +73,7 @@ setup(
     package_dir={'': 'src'},
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     include_package_data=True,
-    data_files=get_data_files(report_templates) if os.path.exists(report_templates) else [],
+    data_files=get_data_files_in_package('src/legal_api/report-templates', report_templates) if os.path.exists(report_templates) else [],
     extras_require={
         'templates': [],
     },
