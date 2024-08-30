@@ -56,17 +56,26 @@ import os
 
 report_templates = 'report-templates'
 
+def get_data_files(directory):
+    data_files = []
+    for dirpath, dirnames, filenames in os.walk(directory):
+        for filename in filenames:
+            filepath = os.path.join(dirpath, filename)
+            # Create the installation path by removing the base directory name
+            install_path = os.path.relpath(dirpath, directory)
+            data_files.append((os.path.join('legal_api', 'report-templates', install_path), [filepath]))
+    return data_files
+
+
 setup(
     name="legal_api",
-    version="0.1.0",  # Replace with your versioning logic
+    version=version,
     author_email='thor@wolpert.ca',
     packages=find_packages('src'),
     package_dir={'': 'src'},
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     include_package_data=True,
-    data_files=[
-        ('legal_api/report-templates', [os.path.join(report_templates, f) for f in os.listdir(report_templates)])
-    ] if os.path.exists(report_templates) else [],
+    data_files=get_data_files(report_templates) if os.path.exists(report_templates) else [],
     extras_require={
         'templates': [],
     },
