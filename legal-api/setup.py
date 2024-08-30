@@ -59,13 +59,15 @@ setup(
     author_email='thor@wolpert.ca',
     packages=find_packages(where='src'),
     package_dir={'': 'src'},
-    py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     include_package_data=True,
-    data_files=[('templates', ['../report-templates/*'])],  # Example of including the templates as data files
+    package_data={
+        'legal_api': ['../report-templates/*'],  # Include files from report-templates
+    },
+    py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     license=read('LICENSE'),
     long_description=read('README.md'),
     zip_safe=False,
     install_requires=REQUIREMENTS,
-    setup_requires=["pytest-runner", ],
-    tests_require=["pytest", ]
+    setup_requires=["pytest-runner"],
+    tests_require=["pytest"]
 )
