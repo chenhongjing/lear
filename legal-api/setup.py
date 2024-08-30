@@ -57,7 +57,7 @@ setup(
     name="legal_api",
     version=version,
     author_email='thor@wolpert.ca',
-    packages=find_packages('src') + find_packages(where='report-template'),
+    packages=find_packages('src') + find_packages(where='report-templates'),
     package_dir={
         '': 'src',
         'report_templates': 'report-templates'
