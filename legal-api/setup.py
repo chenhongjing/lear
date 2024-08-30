@@ -61,7 +61,7 @@ setup(
     package_dir={'': 'src'},
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     include_package_data=True,
-    data_files=[('templates', ['report-templates/*'])],  # Example of including the templates as data files
+    data_files=[('templates', ['../report-templates/*'])],  # Example of including the templates as data files
     license=read('LICENSE'),
     long_description=read('README.md'),
     zip_safe=False,
