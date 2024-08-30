@@ -60,9 +60,7 @@ setup(
     packages=find_packages(where='src'),
     package_dir={'': 'src'},
     include_package_data=True,
-    package_data={
-        'legal_api': ['../report-templates/*.html'],  # Include files from report-templates
-    },
+    data_files=[('legal_api/report_templates', glob('report-templates/*'))],  # Include report-templates as data files
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     license=read('LICENSE'),
     long_description=read('README.md'),
@@ -71,3 +69,4 @@ setup(
     setup_requires=["pytest-runner"],
     tests_require=["pytest"]
 )
+
