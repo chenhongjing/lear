@@ -62,7 +62,7 @@ setup(
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     include_package_data=True,
     extras_require={
-        'templates': ['report-template'],
+        'templates': ['report-templates'],
     },
     license=read('LICENSE'),
     long_description=read('README.md'),
