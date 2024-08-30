@@ -61,7 +61,7 @@ setup(
     package_dir={'': 'src'},
     include_package_data=True,
     package_data={
-        'legal_api': ['../report-templates/*'],  # Include files from report-templates
+        'legal_api': ['../report-templates/*.html'],  # Include files from report-templates
     },
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     license=read('LICENSE'),
