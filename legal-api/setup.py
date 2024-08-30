@@ -52,19 +52,23 @@ def read(filepath):
 
 REQUIREMENTS = read_requirements('requirements.txt')
 
+import os
+
+report_templates = 'report-templates'
+
 setup(
     name="legal_api",
-    version=version,
+    version="0.1.0",  # Replace with your versioning logic
     author_email='thor@wolpert.ca',
     packages=find_packages('src'),
     package_dir={'': 'src'},
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     include_package_data=True,
-    package_data={
-        'legal_api': ['report-templates/*']
-    },
+    data_files=[
+        ('legal_api/report-templates', [os.path.join(report_templates, f) for f in os.listdir(report_templates)])
+    ] if os.path.exists(report_templates) else [],
     extras_require={
-        'templates': [],  # This doesn't add any additional dependencies, just triggers package_data inclusion.
+        'templates': [],
     },
     license=read('LICENSE'),
     long_description=read('README.md'),
