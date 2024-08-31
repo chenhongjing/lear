@@ -66,7 +66,7 @@ setup(
     install_requires=REQUIREMENTS,
     setup_requires=["pytest-runner", ],
     tests_require=["pytest", ],
-    package_data={
-        'legal_api': ['../report-templates/*.html']
-    }
+    data_files=[
+        ('legal-api-report-templates', ['report-templates/*.html'])
+    ]
 )
