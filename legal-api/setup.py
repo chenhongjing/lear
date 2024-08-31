@@ -67,6 +67,6 @@ setup(
     setup_requires=["pytest-runner", ],
     tests_require=["pytest", ],
     data_files=[
-        ('legal-api-report-templates', ['../report-templates/*.html'])
+        ('legal-api-report-templates', ['report-templates/*.html'])
     ]
 )
