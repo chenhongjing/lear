@@ -17,6 +17,7 @@ import ast
 from glob import glob
 from os.path import basename, splitext
 import re
+import os
 
 from setuptools import setup, find_packages
 
@@ -52,12 +53,19 @@ def read(filepath):
 
 REQUIREMENTS = read_requirements('requirements.txt')
 
+additional_package = []
+if os.getenv('INSTALL_REPORT_TEMPLATES', '0') == '1':
+    additional_package = ['report_templates']
+
 setup(
     name="legal_api",
     version=version,
     author_email='thor@wolpert.ca',
-    packages=find_packages('src'),
-    package_dir={'': 'src'},
+    packages=find_packages('src') + additional_package,
+    package_dir={
+        '': 'src',
+        'report_templates': 'report-templates'
+    },
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
     include_package_data=True,
     license=read('LICENSE'),
@@ -65,5 +73,5 @@ setup(
     zip_safe=False,
     install_requires=REQUIREMENTS,
     setup_requires=["pytest-runner", ],
-    tests_require=["pytest", ]
+    tests_require=["pytest", ],
 )
