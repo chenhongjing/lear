@@ -52,7 +52,21 @@ def read(filepath):
 
 REQUIREMENTS = read_requirements('requirements.txt')
 
-report_templates = glob('report-templates/**/*.html', recursive=True)
+# report_templates = glob('report-templates/**/*.html', recursive=True)
+import os
+
+def package_data_files(source_dir, target_dir):
+    data_files = []
+    for root, _, files in os.walk(source_dir):
+        relative_path = os.path.relpath(root, source_dir)
+        target_path = os.path.join(target_dir, relative_path)
+        file_paths = [os.path.join(root, file) for file in files]
+        if file_paths:
+            data_files.append((target_path, file_paths))
+    return data_files
+
+data_files = package_data_files('report-templates', 'legal-api-report-templates')
+
 
 setup(
     name="legal_api",
@@ -68,7 +82,5 @@ setup(
     install_requires=REQUIREMENTS,
     setup_requires=["pytest-runner", ],
     tests_require=["pytest", ],
-    data_files=[
-        ('legal-api-report-templates', report_templates)
-    ]
+    data_files=data_files
 )
