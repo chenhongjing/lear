@@ -82,5 +82,8 @@ setup(
     install_requires=REQUIREMENTS,
     setup_requires=["pytest-runner", ],
     tests_require=["pytest", ],
-    data_files=data_files
+    data_files=data_files if 'templates' in os.environ else [],
+    extra_require={
+        'templates': []
+    }
 )
