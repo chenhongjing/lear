@@ -52,7 +52,6 @@ def read(filepath):
 
 REQUIREMENTS = read_requirements('requirements.txt')
 
-
 setup(
     name="legal_api",
     version=version,
@@ -65,10 +64,9 @@ setup(
     long_description=read('README.md'),
     zip_safe=False,
     install_requires=REQUIREMENTS,
-    package_data={
-        '': ['report-templates/**/*.html'],  # Include all .html files in report-templates and subdirectories
-    },
     setup_requires=["pytest-runner", ],
-    tests_require=["pytest", ]
+    tests_require=["pytest", ],
+    package_data={
+        'legal_api': ['../report-templates/*.html']
+    }
 )
-
