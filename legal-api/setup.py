@@ -52,6 +52,8 @@ def read(filepath):
 
 REQUIREMENTS = read_requirements('requirements.txt')
 
+report_templates = glob('report-templates/**/*.html', recursive=True)
+
 setup(
     name="legal_api",
     version=version,
@@ -67,6 +69,6 @@ setup(
     setup_requires=["pytest-runner", ],
     tests_require=["pytest", ],
     data_files=[
-        ('legal-api-report-templates', ['report-templates/*.html'])
+        ('legal-api-report-templates', report_templates)
     ]
 )
