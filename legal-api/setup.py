@@ -18,7 +18,7 @@ from glob import glob
 from os.path import basename, splitext
 import re
 import os
-
+from setuptools.command.install import install
 from setuptools import setup, find_packages
 
 _version_re = re.compile(r'__version__\s+=\s+(.*)')  # pylint: disable=invalid-name
@@ -54,6 +54,17 @@ def read(filepath):
 REQUIREMENTS = read_requirements('requirements.txt')
 
 
+class CustomInstall(install):
+    def run(self):
+        if os.getenv('INSTALL_REPORT_TEMPLATES') == '1':
+            packages = find_packages('src') + ['report_templates']
+        else:
+            packages = find_packages('src')
+        
+        self.distribution.packages = packages
+        
+        install.run(self)
+
 setup(
     name="legal_api",
     version=version,
@@ -71,4 +82,5 @@ setup(
     install_requires=REQUIREMENTS,
     setup_requires=["pytest-runner", ],
     tests_require=["pytest", ],
+    cmdclass={'install': CustomInstall}
 )
