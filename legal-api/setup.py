@@ -54,6 +54,7 @@ def read(filepath):
 REQUIREMENTS = read_requirements('requirements.txt')
 
 additional_package = []
+print(f"INSTALL_REPORT_TEMPLATES: {os.getenv('INSTALL_REPORT_TEMPLATES')}")
 if os.getenv('INSTALL_REPORT_TEMPLATES', '0') == '1':
     additional_package = ['report_templates']
 
