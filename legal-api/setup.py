@@ -53,16 +53,12 @@ def read(filepath):
 
 REQUIREMENTS = read_requirements('requirements.txt')
 
-additional_package = []
-print(f"INSTALL_REPORT_TEMPLATES: {os.getenv('INSTALL_REPORT_TEMPLATES')}")
-if os.getenv('INSTALL_REPORT_TEMPLATES', '0') == '1':
-    additional_package = ['report_templates']
 
 setup(
     name="legal_api",
     version=version,
     author_email='thor@wolpert.ca',
-    packages=find_packages('src') + additional_package,
+    packages=find_packages('src') + ['report_templates'],
     package_dir={
         '': 'src',
         'report_templates': 'report-templates'
