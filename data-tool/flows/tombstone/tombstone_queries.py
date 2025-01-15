@@ -1,6 +1,96 @@
+def get_unprocessed_ted_ting_query(flow_name, environment, initial_size):
+    query = f"""
+    with recursive linked_corps as (
+        -- initial
+        select
+            ci.ted_corp_num as corp_num,
+            ci.ting_corp_num
+        from corp_involved_amalgamating ci
+        where ci.ted_corp_num in (
+            select ted_corp_num
+            from corp_involved_amalgamating
+            where not exists (
+                select 1 from corp_processing tcp
+                where tcp.corp_num = ted_corp_num
+                and tcp.flow_name = '{flow_name}'
+                and tcp.environment = '{environment}'
+            )
+            limit {initial_size}
+        )
+        -- recursive
+        union
+        select
+            lc.ting_corp_num as corp_num,
+            ci.ting_corp_num
+        from corp_involved_amalgamating ci
+        join linked_corps lc on lc.ting_corp_num = ci.ted_corp_num
+    ),
+    all_involved_corp_nums as (
+        select corp_num from linked_corps
+        union
+        select ting_corp_num
+        from linked_corps
+        where ting_corp_num like 'BC%' or ting_corp_num like 'Q%' or ting_corp_num like 'C%'
+    ),
+    unprocessed_corps as (
+        select
+            lc.corp_num,
+            string_agg(distinct lc.ting_corp_num, ',') 
+                filter (where lc.ting_corp_num like 'BC%' or lc.ting_corp_num like 'Q%' or lc.ting_corp_num like 'C%') as blocked_by
+        from linked_corps lc
+        group by lc.corp_num
+
+        union
+
+        select
+            aicn.corp_num,
+            null as blocked_by
+        from all_involved_corp_nums aicn
+        where aicn.corp_num not in (select corp_num from linked_corps)
+    )
+    select uc.corp_num, uc.blocked_by, c.corp_type_cd, cs.state_type_cd, cp.flow_name, 
+        cp.processed_status, cp.last_processed_event_id, cp.failed_event_id, cp.failed_event_file_type
+    from unprocessed_corps uc 
+    left join corporation c on c.corp_num = uc.corp_num
+    left join corp_state cs on cs.corp_num = c.corp_num
+    left join corp_processing cp on cp.corp_num = c.corp_num 
+        and cp.flow_name = '{flow_name}'
+        and cp.environment = '{environment}'
+    where 1 = 1
+    and c.corp_type_cd in ('BC', 'C', 'ULC', 'CUL', 'CC', 'CCC', 'QA', 'QB', 'QC', 'QD', 'QE') -- TODO: update transfer script
+    and cs.end_event_id is null
+    and cp.processed_status is null
+    and cp.flow_run_id is null
+    """
+    return query
+
+
+def get_total_unprocessed_ted_ting_count_query(flow_name, environment):
+    query = f"""
+    with all_ted_tings as(
+        select distinct ting_corp_num as corp_num from corp_involved_amalgamating
+        union
+        select distinct ted_corp_num as corp_num from corp_involved_amalgamating
+    )
+    select count(*)
+    from all_ted_tings att
+    left outer join corp_state cs
+        on cs.corp_num = att.corp_num
+    left outer join corp_processing cp
+        on cp.corp_num = att.corp_num 
+        and cp.flow_name = '{flow_name}'
+        and cp.environment = '{environment}'
+    where 1 = 1
+    and cs.end_event_id is null
+    and ((cp.processed_status is null or cp.processed_status != 'COMPLETED'))
+    """
+    return query
+
+
 def get_unprocessed_corps_query(flow_name, environment, batch_size):
     query = f"""
     select c.corp_num, c.corp_type_cd, cs.state_type_cd, cp.flow_name, cp.processed_status, cp.last_processed_event_id, cp.failed_event_id, cp.failed_event_file_type
+    , 'xxx' as blocked_by
     from corporation c
     left outer join corp_state cs
         on cs.corp_num = c.corp_num
@@ -9,6 +99,11 @@ def get_unprocessed_corps_query(flow_name, environment, batch_size):
         and cp.flow_name = '{flow_name}'
         and cp.environment = '{environment}'
     where 1 = 1
+      and c.corp_num not in (
+        select distinct ting_corp_num as corp_num from corp_involved_amalgamating
+        union
+        select distinct ted_corp_num as corp_num from corp_involved_amalgamating
+      )
 --    and c.corp_type_cd like 'BC%' -- some are 'Q%'
 --    and c.corp_num = 'BC0000621' -- state changes a lot
 --    and c.corp_num = 'BC0883637' -- one pary with multiple roles, but werid address_ids, same filing submitter but diff email
@@ -18,7 +113,7 @@ def get_unprocessed_corps_query(flow_name, environment, batch_size):
 --    and c.corp_num = 'BC0326163' -- double quotes in corp name, no share structure, city in street additional of party's address
 --    and c.corp_num = 'BC0395512' -- long RG, RC addresses
 --    and c.corp_num = 'BC0043406' -- lots of directors
---    and c.corp_num in ('BC0326163', 'BC0395512', 'BC0883637') -- TODO: re-migrate issue (can be solved by adding tracking)
+--    and c.corp_num in ('BC0326163', 'BC0395512', 'BC0883637')
 --    and c.corp_num = 'BC0870626' -- lots of filings - IA, CoDs, ARs
 --      and c.corp_num = 'BC0004969' -- lots of filings - IA, ARs, transition, alteration, COD, COA
 --    and c.corp_num = 'BC0002567' -- lots of filings - IA, ARs, transition, COD
@@ -64,6 +159,11 @@ def get_total_unprocessed_count_query(flow_name, environment):
         and cp.flow_name = '{flow_name}'
         and cp.environment = '{environment}'
     where 1 = 1
+    and c.corp_num not in (
+        select distinct ting_corp_num as corp_num from corp_involved_amalgamating
+        union
+        select distinct ted_corp_num as corp_num from corp_involved_amalgamating
+    )
     and cs.end_event_id is null
     and ((cp.processed_status is null or cp.processed_status != 'COMPLETED'))
     """
@@ -173,7 +273,7 @@ def get_business_query(corp_num, suffix):
             else false
         end admin_freeze
     from corporation c
-    left outer join event e on e.corp_num = c.corp_num and e.event_type_cd = 'CONVICORP' -- need to add other event like CONVAMAL, CONVCIN...
+    left outer join event e on e.corp_num = c.corp_num and e.event_type_cd IN ('CONVICORP', 'CONVAMAL') -- need to add other event like CONVCIN...
     where 1 = 1
     --and c.corp_num = 'BC0684912' -- state - ACT
     --and c.corp_num = 'BC0000621' -- state - HLD
@@ -508,7 +608,7 @@ def get_amalgamation_query(corp_num):
         -- filing
         f.filing_type_cd       as f_filing_type_cd,
         to_char(f.effective_dt::timestamp at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SSTZH:TZM') as f_effective_dt_str,
-        f.court_appr_ind       as f_court_approval,
+        coalesce(f.court_appr_ind, false)       as f_court_approval,
         -- event_file
         e.event_type_cd || '_' || COALESCE(f.filing_type_cd, 'NULL') as event_file_type
     from corp_involved_amalgamating cig

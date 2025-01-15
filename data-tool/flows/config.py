@@ -138,6 +138,8 @@ class _Config():  # pylint: disable=too-few-public-methods
     TOMBSTONE_BATCHES = int(TOMBSTONE_BATCHES) if TOMBSTONE_BATCHES.isnumeric() else 0
     TOMBSTONE_BATCH_SIZE = os.getenv('TOMBSTONE_BATCH_SIZE')
     TOMBSTONE_BATCH_SIZE = int(TOMBSTONE_BATCH_SIZE) if TOMBSTONE_BATCH_SIZE.isnumeric() else 0
+    ## to enable TING & TED flow
+    TOMBSTONE_AMALG = os.getenv('TOMBSTONE_AMALG').lower() == 'true'
 
     TESTING = False
     DEBUG = False

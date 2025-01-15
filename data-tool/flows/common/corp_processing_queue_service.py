@@ -29,13 +29,14 @@ class CorpProcessingQueueService:
         init_query = f"""
         WITH candidate_corps AS ({base_query}),
         available_corps AS (
-            SELECT corp_num, corp_type_cd
+            SELECT corp_num, corp_type_cd, blocked_by
             FROM candidate_corps
             FOR UPDATE SKIP LOCKED
         )
         INSERT INTO corp_processing (
             corp_num,
             corp_type_cd,
+            blocked_by,
             flow_name,
             processed_status,
             environment,
@@ -47,6 +48,7 @@ class CorpProcessingQueueService:
         SELECT 
             corp_num,
             corp_type_cd,
+            blocked_by,
             :flow_name,
             :status,
             :environment,
@@ -88,12 +90,21 @@ class CorpProcessingQueueService:
         query = """
         WITH claimable AS (
             SELECT corp_num, id
-            FROM corp_processing
+            FROM corp_processing cp
             WHERE processed_status = :pending_status
             AND environment = :environment
             AND flow_name = :flow_name
             AND flow_run_id = :flow_run_id
             AND claimed_at IS NULL
+            AND NOT EXISTS (
+                SELECT 1
+                FROM UNNEST(string_to_array(cp.blocked_by, ',')) as blocked_corp
+                left outer join corp_processing cp2 on cp2.corp_num = blocked_corp
+                where cp2.processed_status != 'COMPLETED'
+                AND cp2.environment = :environment
+                AND cp2.flow_name = :flow_name
+                AND cp2.flow_run_id = :flow_run_id
+            )
             LIMIT :batch_size
             FOR UPDATE SKIP LOCKED
         )
